@@ -1,0 +1,57 @@
+{
+    "CERTIFICATES": {
+        "CAFILE": "/Users/evan/mqtt/verne-certs/intermediate/certs/ca-chain.cert.pem",
+        "CERTFILE": "/Users/evan/mqtt/verne-certs/intermediate/certs/client.cert.pem",
+        "KEYFILE": "/Users/evan/mqtt/verne-certs/intermediate/private/client.key.pem"
+    },
+    "CREDENTIALS": {
+        "USERNAME": "client",
+        "PASSWORD": "client"
+    },
+    "BROKER_INFO": {
+        "BROKER": "localhost",
+        "PORT": 8883
+    },
+    "LOCUST_VARIABLES": {
+        "LOWER": 0.1,
+        "UPPER": 1,
+        "REQUESTS_PER_SEC_HIGH_FREQ": 10,
+        "REQUESTS_PER_SEC_LOW_FREQ": 0.1
+    },
+    "PUBLISH_INTERVALS": {
+        "2": 2,
+        "10": 10,
+        "60": 60,
+        "40": 40
+    },
+    "TRANSPORT": "tcp",
+    "TOPICS": {
+        "RANDOM_TOPICS": [
+            "/home", 
+            "/home/room1",
+            "/home/room1/temp",
+            "/home/room1/humid",
+            "/home/room2",
+            "/home/room2/temp",
+            "/home/room2/humid",
+            "/home/room3",
+            "/home/room3/temp",
+            "/home/room3/humid",
+            "/office", 
+            "/office/room1",
+            "/office/room1/temp",
+            "/office/room1/humid",
+            "/office/room2",
+            "/office/room2/temp",
+            "/office/room2/humid",
+            "/office/room3",
+            "/office/room3/temp",
+            "/office/room3/humid"
+        ],
+        "TEST_TOPICS": [
+            "/test1",
+            "/test2",
+            "/test3"
+        ]
+    }
+}
