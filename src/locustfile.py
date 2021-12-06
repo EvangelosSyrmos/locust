@@ -14,7 +14,6 @@ from locust.user.wait_time import between, constant_throughput
 from uuid import uuid4
 from typing import Any, Optional, List
 from enum import Enum
-from dataclasses import dataclass
 
 import paho.mqtt.client as mqtt
 
@@ -33,8 +32,11 @@ with open('500_bytes.json') as f:
 with open('700_bytes.json') as f:
     PAYLOAD_700_BYTES = json.dumps(json.load(f))
 
-# with open('payload.json') as f:
-#     PAYLOAD_DATA = json.dumps(json.load(f))
+
+# Internall Variables
+SUBACK_FAILURE = 0x80
+CLIENT_COUNTER = 0
+# stats = {"content-length": 0}
 
 class OnStart_Connect_Sub_Task_PuB_At_Time_Intervals_Clients(TaskSet):
     '''
@@ -47,6 +49,12 @@ class OnStart_Connect_Sub_Task_PuB_At_Time_Intervals_Clients(TaskSet):
         => Publish to a random topic at a high frequency
     '''
     initial_publish = True
+    publish_topics = SETTINGS["TOPICS"]['TEST_TOPICS']
+    subscribe_topics = SETTINGS['TOPICS']['TEST_TOPICS']
+    payload_200_bytes = PAYLOAD_200_BYTES
+    payload_500_bytes = PAYLOAD_500_BYTES
+    payload_700_bytes = PAYLOAD_700_BYTES
+
     # wait_time = constant_throughput(
     #     SETTINGS['LOCUST_VARIABLES']['REQUESTS_PER_SEC_HIGH_FREQ'])
 
@@ -55,40 +63,45 @@ class OnStart_Connect_Sub_Task_PuB_At_Time_Intervals_Clients(TaskSet):
         print("Starting test")
     
     def on_start(self):
-        for topic in SETTINGS['TOPICS']['TEST_TOPICS']:
+        for topic in self.subscribe_topics:
             self.client.subscribe(topic, qos=0)
-    
+
     @task
-    def high_frequency_publish_task(self):
+    def publish(self):
         if not self.initial_publish:
             if int((datetime.now() - self.last_published_timestamp_of_two_seconds).seconds) >= SETTINGS["PUBLISH_INTERVALS"]["2"]:
-                self.client.publish(random.choice(SETTINGS["TOPICS"]['TEST_TOPICS']),
-                                    payload = PAYLOAD_200_BYTES)
+                self.client.publish(random.choice(self.publish_topics), payload = self.payload_200_bytes)
+                # self.client.publish(random.choice(self.publish_topics), payload = "200")
                 self.last_published_timestamp_of_two_seconds = datetime.now()
                 print(f"{self.client.client_id} => P: {SETTINGS['PUBLISH_INTERVALS']['2']} ==> {datetime.now()}")
             if int((datetime.now() - self.last_published_timestamp_of_ten_seconds).seconds) >= SETTINGS["PUBLISH_INTERVALS"]["10"]:
-                self.client.publish(random.choice(SETTINGS["TOPICS"]['TEST_TOPICS']),
-                                    payload = PAYLOAD_500_BYTES)
+                self.client.publish(random.choice(self.publish_topics), payload = self.payload_500_bytes)
+                # self.client.publish(random.choice(self.publish_topics), payload = "500")
                 self.last_published_timestamp_of_ten_seconds = datetime.now()
                 print(f"{self.client.client_id} => P: {SETTINGS['PUBLISH_INTERVALS']['10']} ==> {datetime.now()}")
             if int((datetime.now() - self.last_published_timestamp_of_sixty_seconds).seconds) >= SETTINGS["PUBLISH_INTERVALS"]["60"]:
-                self.client.publish(random.choice(SETTINGS["TOPICS"]['TEST_TOPICS']),
-                                    payload = PAYLOAD_700_BYTES)
+                self.client.publish(random.choice(self.publish_topics), payload = self.payload_700_bytes)
+                # self.client.publish(random.choice(self.publish_topics), payload = "700")
                 self.last_published_timestamp_of_sixty_seconds = datetime.now()
                 print(f"{self.client.client_id} => P: {SETTINGS['PUBLISH_INTERVALS']['60']} ==> {datetime.now()}")
         else:
-            self.client.publish(random.choice(SETTINGS["TOPICS"]['TEST_TOPICS']),
-                                payload = round(random.uniform(0, 1), 2))
+            self.client.publish(random.choice(self.publish_topics), payload= 'start')
             self.last_published_timestamp_of_two_seconds = self.last_published_timestamp_of_ten_seconds = self.last_published_timestamp_of_sixty_seconds = datetime.now()
             self.initial_publish = False
-            print(f"{self.client.client_id} => First publish completed")
 
-SUBACK_FAILURE = 0x80
-CLIENT_COUNTER = 0
+    # @events.request.add_listener
+    # def on_request(request_type, name, response_time, response_length, exception, context, **kwargs):
+    #     # stats["content-length"] += response_length
+    #     print("Inside Request")
+    #     print(f"request_type: {request_type}, name: {name}, response_time: {response_time}, response_length: {response_length}, exception: {exception}, context: {context}")
+    #     print(f"response length: {type(response_length)}")
 
 def increase():
     global CLIENT_COUNTER
     CLIENT_COUNTER += 1
+
+def get_payload_size_in_utf_8(value):
+    return len(value.encode("utf-8"))
 
 class EventType(Enum):
     CONNECT = 'connect'
@@ -109,7 +122,7 @@ class PublishedMessageContext(typing.NamedTuple):
     qos: int
     topic: str
     start_time: float
-    payload_size: int
+    payload_size: Any
 
 
 class SubscribeContext(typing.NamedTuple):
@@ -118,8 +131,6 @@ class SubscribeContext(typing.NamedTuple):
     start_time: float
 
 class MqttUser(User):
-    # tasks = {OnStart_Connect_Sub_Task_PuB_High_Frequency_Clients: 4,
-    #         OnStart_Connect_Sub_Task_PuB_Low_Frequency_Clients: 1}
     tasks = {OnStart_Connect_Sub_Task_PuB_At_Time_Intervals_Clients}
     
     username = SETTINGS['CREDENTIALS']['USERNAME']
@@ -179,7 +190,9 @@ class MqttClient(mqtt.Client):
         # self.on_message = self._on_message_cb
 
         self._publish_requests = {}
+        # self._publish_requests: dict[int, PublishedMessageContext] = {}
         self._subscribe_requests = {}
+        # self._subscribe_requests: dict[int, PublishedMessageContext] = {}
     
     def _on_message_cb(self, client, userdata, message):
         """
@@ -210,15 +223,30 @@ class MqttClient(mqtt.Client):
                 },
             )
         else:
+            # self.environment.events.request.fire(
+            #     request_type=RequestType.MQTT.value,
+            #     name=_generate_mqtt_event_name(
+            #         self.client_id,
+            #         EventType.PUBLISH.value,
+            #         request_context.qos, 
+            #         request_context.topic),
+            #     response_time=(cb_time - request_context.start_time) * 1000,
+            #     response_length=request_context.payload_size,
+            #     exception=None,
+            #     context={
+            #         "client_id": self.client_id,
+            #         **request_context._asdict(),
+            #     },
+            # )
             self.environment.events.request.fire(
                 request_type=RequestType.MQTT.value,
                 name=_generate_mqtt_event_name(
                     self.client_id,
-                    EventType.PUBLISH.value, 
+                    EventType.PUBLISH.value,
                     request_context.qos, 
                     request_context.topic),
                 response_time=(cb_time - request_context.start_time) * 1000,
-                response_length=request_context.payload_size,
+                response_length=get_payload_size_in_utf_8(request_context.payload_size),
                 exception=None,
                 context={
                     "client_id": self.client_id,
@@ -361,6 +389,7 @@ class MqttClient(mqtt.Client):
         )
 
         publish_info = super().publish(topic, payload=payload, qos=qos, retain=retain)
+
 
         if publish_info.rc != mqtt.MQTT_ERR_SUCCESS:
             self.environment.events.request.fire(
